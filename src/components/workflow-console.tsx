@@ -819,6 +819,7 @@ export default function WorkflowConsole() {
   const [composerPreview, setComposerPreview] = useState("");
   const [composerPreviewError, setComposerPreviewError] = useState<string | null>(null);
   const [requestDraft, setRequestDraft] = useState<RequestConsoleDraft>(createRequestDraft);
+  const [requestPayloadSeedKey, setRequestPayloadSeedKey] = useState("");
   const [requestSummary, setRequestSummary] = useState<RequestSummaryResponse | null>(null);
   const [requestDetails, setRequestDetails] = useState<RequestDetails | null>(null);
 
@@ -901,6 +902,8 @@ export default function WorkflowConsole() {
   useEffect(() => {
     if (!requestTarget) {
       setRequestWorkflow(null);
+      setRequestPayloadSeedKey("");
+      setRequestWorkflowLoading(false);
       return;
     }
 
@@ -909,6 +912,7 @@ export default function WorkflowConsole() {
       createWorkflowKey(selectedWorkflow.name, selectedWorkflow.version) === requestTargetKey
     ) {
       setRequestWorkflow(selectedWorkflow);
+      setRequestWorkflowLoading(false);
       return;
     }
 
@@ -917,6 +921,13 @@ export default function WorkflowConsole() {
     }
 
     let cancelled = false;
+    setRequestWorkflow(null);
+    setRequestPayloadSeedKey("");
+    setRequestDraft((current) => ({
+      ...current,
+      inputDataText: stringifyJson({}),
+      inputMode: "json",
+    }));
     setRequestWorkflowLoading(true);
 
     void fetchWorkflowConfigDetail(requestTarget.name, requestTarget.version)
@@ -944,6 +955,44 @@ export default function WorkflowConsole() {
     requestTargetKey,
     requestWorkflowKey,
     selectedWorkflow,
+  ]);
+
+  useEffect(() => {
+    if (!requestWorkflow || !requestTargetKey) {
+      return;
+    }
+
+    if (requestWorkflowKey !== requestTargetKey) {
+      return;
+    }
+
+    if (requestPayloadSeedKey === requestTargetKey) {
+      return;
+    }
+
+    const workflowNameMatches = requestDraft.workflowName.trim() === requestWorkflow.name;
+    const versionMatches =
+      requestDraft.workflowVersion === undefined ||
+      requestDraft.workflowVersion === requestWorkflow.version;
+
+    if (!workflowNameMatches || !versionMatches) {
+      return;
+    }
+
+    setRequestDraft((current) => ({
+      ...current,
+      inputDataText: buildRequestSample(requestWorkflow),
+      inputMode:
+        Object.keys(requestWorkflow.inputSchema?.fields ?? {}).length > 0 ? "guided" : "json",
+    }));
+    setRequestPayloadSeedKey(requestTargetKey);
+  }, [
+    requestDraft.workflowName,
+    requestDraft.workflowVersion,
+    requestPayloadSeedKey,
+    requestTargetKey,
+    requestWorkflow,
+    requestWorkflowKey,
   ]);
 
   function setComposerSections(
@@ -1170,6 +1219,7 @@ export default function WorkflowConsole() {
         "Request input",
         {}
       );
+      const nextIdempotencyKey = createIdempotencyKey();
 
       const response = await fetch("/api/request", {
         method: "POST",
@@ -1195,6 +1245,10 @@ export default function WorkflowConsole() {
         setRequestDraft((current) => ({
           ...current,
           requestIdLookup: payload.requestId,
+          idempotencyKey:
+            current.idempotencyKey.trim() === idempotencyKey
+              ? nextIdempotencyKey
+              : current.idempotencyKey,
         }));
         await loadRequestDetails(payload.requestId);
       }
@@ -1203,8 +1257,8 @@ export default function WorkflowConsole() {
         tone: "success",
         message:
           payload.status === "processing"
-            ? `Request ${payload.requestId} accepted and is still processing.`
-            : `Request ${payload.requestId} finished with status ${payload.status}.`,
+            ? `Request ${payload.requestId} accepted and is still processing. A new idempotency key is ready for the next run.`
+            : `Request ${payload.requestId} finished with status ${payload.status}. A new idempotency key is ready for the next run.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit workflow request.";
@@ -1951,6 +2005,7 @@ export default function WorkflowConsole() {
       inputMode:
         Object.keys(selectedWorkflow.inputSchema?.fields ?? {}).length > 0 ? "guided" : "json",
     }));
+    setRequestPayloadSeedKey(createWorkflowKey(selectedWorkflow.name, selectedWorkflow.version));
     setWorkspaceView("requests");
   };
 
@@ -1984,6 +2039,27 @@ export default function WorkflowConsole() {
     }));
   };
 
+  const handleChooseRequestWorkflow = (workflowName: string) => {
+    setRequestPayloadSeedKey("");
+    setRequestDraft((current) => ({
+      ...current,
+      workflowName,
+      workflowVersion: undefined,
+      inputDataText: stringifyJson({}),
+      inputMode: "json",
+    }));
+  };
+
+  const handleChooseRequestWorkflowVersion = (workflowVersion?: number) => {
+    setRequestPayloadSeedKey("");
+    setRequestDraft((current) => ({
+      ...current,
+      workflowVersion,
+      inputDataText: stringifyJson({}),
+      inputMode: "json",
+    }));
+  };
+
   const handleFillRequestSample = () => {
     if (!requestWorkflow) {
       return;
@@ -1994,6 +2070,7 @@ export default function WorkflowConsole() {
       inputDataText: buildRequestSample(requestWorkflow),
       inputMode: canUseGuidedRequestForm ? "guided" : "json",
     }));
+    setRequestPayloadSeedKey(requestWorkflowKey);
   };
 
   return (
@@ -2174,6 +2251,8 @@ export default function WorkflowConsole() {
               <WorkflowConsoleRequestRunner
                 canUseGuidedRequestForm={canUseGuidedRequestForm}
                 loadingRequest={loadingRequest}
+                onChooseRequestWorkflow={handleChooseRequestWorkflow}
+                onChooseRequestWorkflowVersion={handleChooseRequestWorkflowVersion}
                 requestChecklist={requestChecklist}
                 requestDetails={requestDetails}
                 requestDraft={requestDraft}

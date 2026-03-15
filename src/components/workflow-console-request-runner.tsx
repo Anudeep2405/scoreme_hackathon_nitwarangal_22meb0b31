@@ -33,6 +33,8 @@ interface WorkflowChoice {
 interface WorkflowConsoleRequestRunnerProps {
   canUseGuidedRequestForm: boolean;
   loadingRequest: boolean;
+  onChooseRequestWorkflow: (workflowName: string) => void;
+  onChooseRequestWorkflowVersion: (workflowVersion?: number) => void;
   requestChecklist: ChecklistItem[];
   requestDetails: RequestDetails | null;
   requestDraft: RequestConsoleDraft;
@@ -90,6 +92,8 @@ function getGuideToneClass(tone: GuideTone) {
 export function WorkflowConsoleRequestRunner({
   canUseGuidedRequestForm,
   loadingRequest,
+  onChooseRequestWorkflow,
+  onChooseRequestWorkflowVersion,
   requestChecklist,
   requestDetails,
   requestDraft,
@@ -223,13 +227,7 @@ export function WorkflowConsoleRequestRunner({
               id="request-workflow-name"
               className={styles.select}
               value={requestDraft.workflowName}
-              onChange={(event) =>
-                onSetRequestDraft((current) => ({
-                  ...current,
-                  workflowName: event.target.value,
-                  workflowVersion: undefined,
-                }))
-              }
+              onChange={(event) => onChooseRequestWorkflow(event.target.value)}
             >
               <option value="">Select a stored workflow</option>
               {workflowChoices.map((choice) => (
@@ -256,12 +254,9 @@ export function WorkflowConsoleRequestRunner({
               className={styles.select}
               value={requestDraft.workflowVersion ? String(requestDraft.workflowVersion) : ""}
               onChange={(event) =>
-                onSetRequestDraft((current) => ({
-                  ...current,
-                  workflowVersion: event.target.value
-                    ? Number(event.target.value)
-                    : undefined,
-                }))
+                onChooseRequestWorkflowVersion(
+                  event.target.value ? Number(event.target.value) : undefined
+                )
               }
               disabled={!requestDraft.workflowName.trim()}
             >
@@ -293,6 +288,9 @@ export function WorkflowConsoleRequestRunner({
                 }))
               }
             />
+            <p className={styles.helperText}>
+              Reusing the same key returns the earlier request. A fresh key is generated after each successful send.
+            </p>
           </div>
         </div>
 

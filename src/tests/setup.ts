@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import redisClient from '@/lib/redis';
 import { env } from '@/config/env';
 
 const skipExternalServices = process.env.SKIP_TEST_SERVICES === 'true';
@@ -18,10 +17,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (skipExternalServices) {
-    return;
-  }
+  const { closeRetryQueue } = await import('@/queues/retryQueue');
+  await closeRetryQueue();
 
-  await mongoose.connection.close();
-  redisClient.quit();
+  if (!skipExternalServices) {
+    await mongoose.connection.close();
+    if (global._redisClient) {
+      await global._redisClient.quit();
+    }
+  }
 });
