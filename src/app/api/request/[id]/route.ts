@@ -19,6 +19,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({
       requestId: requestDoc.requestId,
       workflowName: requestDoc.workflowName,
+      workflowVersion: requestDoc.workflowVersion,
+      workflowSource: requestDoc.workflowSource,
       input: requestDoc.input,
       currentStage: requestDoc.currentStage,
       status: requestDoc.status,

@@ -19,13 +19,8 @@ describe('Configurable Workflow API', () => {
         idempotencyKey: `invalid-${Date.now()}`,
       });
     
-    // We expect 400 because the workflow evaluation might fail, or let's look at what our engine does.
-    // Wait, Zod validates only workflowName, inputData (as record), and idempotencyKey.
-    // The engine evaluates rules. If amount is missing, required_field rule fails, and it transitions to rejected or rejected_status.
-    
-    expect(res.statusCode).toBe(200);
-    // Actually our rule says: intake stage requires them. If missing, rule fails -> stage fails -> status=rejected
-    expect(res.body.status).toBe('rejected');
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('Input Validation Error');
   });
 
   it('2. happy path approval', async () => {

@@ -4,6 +4,9 @@ export interface IRequest extends Document {
   requestId: string;
   idempotencyKey: string;
   workflowName: string;
+  workflowVersion: number;
+  workflowSource: "database" | "registry";
+  workflowConfigSnapshot?: Record<string, unknown>;
   input: Record<string, any>;
   currentStage: string;
   status: "processing" | "approved" | "rejected" | "manual_review" | "error";
@@ -30,6 +33,14 @@ const RequestSchema = new Schema(
     requestId: { type: String, required: true, unique: true },
     idempotencyKey: { type: String, required: true, unique: true, index: true },
     workflowName: { type: String, required: true },
+    workflowVersion: { type: Number, required: true, min: 0, default: 0 },
+    workflowSource: {
+      type: String,
+      enum: ["database", "registry"],
+      required: true,
+      default: "registry",
+    },
+    workflowConfigSnapshot: { type: Schema.Types.Mixed },
     input: { type: Schema.Types.Mixed, required: true },
     currentStage: { type: String, required: true },
     status: {

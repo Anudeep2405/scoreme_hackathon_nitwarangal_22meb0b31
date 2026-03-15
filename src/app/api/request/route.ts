@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
 import { checkIdempotency, setIdempotency } from "@/services/idempotencyService";
+import { getWorkflowConfig, validateWorkflowInput } from "@/services/workflowConfigService";
 import { WorkflowEngine } from "@/services/workflowEngine";
 import { Request as RequestModel } from "@/models/Request";
 import { retryQueue } from "@/queues/retryQueue";
-import { workflowRegistry } from "@/config/workflows";
 import dbConnect from "@/lib/mongodb";
 import logger from "@/lib/logger";
 
 const requestSchema = z.object({
   workflowName: z.string().min(1),
-  inputData: z.record(z.string(), z.any()),
+  workflowVersion: z.number().int().min(1).optional(),
+  inputData: z.record(z.string(), z.unknown()),
   idempotencyKey: z.string().min(1),
 });
 
@@ -34,13 +35,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Validation Error", details: parsed.error.format() }, { status: 400 });
     }
 
-    const { workflowName, inputData, idempotencyKey } = parsed.data;
+    const {
+      workflowName,
+      workflowVersion: requestedWorkflowVersion,
+      inputData,
+      idempotencyKey,
+    } = parsed.data;
 
     // Validate Workflow Configuration Exists
-    const config = workflowRegistry[workflowName];
-    if (!config) {
-      return NextResponse.json({ error: `Workflow '${workflowName}' not found` }, { status: 400 });
+    const resolvedWorkflow = await getWorkflowConfig(workflowName, requestedWorkflowVersion
+      ? { source: "database", version: requestedWorkflowVersion }
+      : undefined);
+    if (!resolvedWorkflow) {
+      return NextResponse.json(
+        {
+          error: requestedWorkflowVersion
+            ? `Workflow '${workflowName}' version ${requestedWorkflowVersion} not found`
+            : `Workflow '${workflowName}' not found`,
+        },
+        { status: 400 }
+      );
     }
+
+    const { config, source: workflowSource, version: workflowVersion } = resolvedWorkflow;
+
+    const inputValidation = validateWorkflowInput(config, inputData);
+    if (!inputValidation.success) {
+      return NextResponse.json(
+        { error: "Input Validation Error", details: inputValidation.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const normalizedInputData = inputValidation.data;
 
     // Check Idempotency
     const cachedResponse = await checkIdempotency(idempotencyKey);
@@ -57,7 +84,10 @@ export async function POST(req: NextRequest) {
       requestId,
       idempotencyKey,
       workflowName,
-      input: inputData,
+      workflowVersion,
+      workflowSource,
+      workflowConfigSnapshot: config,
+      input: normalizedInputData,
       currentStage: initialStage,
       status: "processing",
     });
@@ -76,11 +106,14 @@ export async function POST(req: NextRequest) {
       await setIdempotency(idempotencyKey, responseBody);
 
       return NextResponse.json(responseBody, { status: result.status === "error" ? 500 : 200 });
-    } catch (engineError: any) {
+    } catch (engineError: unknown) {
       logger.error(`Engine failed synchronously for ${requestId}`, { engineError });
+
+      const engineMessage =
+        engineError instanceof Error ? engineError.message : "Unknown workflow engine error";
       
       // Add to retry queue if external dependency failed
-      if (engineError.message === "External service unavailable") {
+      if (engineMessage === "External service unavailable") {
         await retryQueue.add({ requestId }, { jobId: requestId });
         
         const responseBody = {
@@ -94,10 +127,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(responseBody, { status: 202 }); // Accepted
       }
       
-      return NextResponse.json({ error: "Internal Workflow Error", details: engineError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: "Internal Workflow Error", details: engineMessage },
+        { status: 500 }
+      );
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("API error in POST /api/request", { error });
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
