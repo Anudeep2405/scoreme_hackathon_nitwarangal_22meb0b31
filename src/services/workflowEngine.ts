@@ -1,10 +1,42 @@
-import { workflowRegistry, WorkflowConfig, Rule } from "@/config/workflows";
+import { getWorkflowConfig, parseWorkflowConfig } from "@/services/workflowConfigService";
 import { Request, IRequest } from "@/models/Request";
+import { Transition } from "@/config/workflows";
 import { evaluateRule } from "./ruleEvaluator";
 import { logAuditEvent } from "./auditService";
-import { getExternalScore } from "@/external/externalScore";
+import { runStageActions } from "./stageActionService";
 import dbConnect from "@/lib/mongodb";
 import logger from "@/lib/logger";
+
+type TerminalRequestStatus = Exclude<IRequest["status"], "processing">;
+
+function isTerminalRequestStatus(value: string): value is TerminalRequestStatus {
+  return value === "approved" || value === "rejected" || value === "manual_review" || value === "error";
+}
+
+function findLinearTransition(
+  transitions: Transition[],
+  currentStage: string,
+  outcome: "success" | "failure"
+) {
+  const exactCondition = outcome === "failure" ? "on_failure" : "on_success";
+  const exactMatch = transitions.find(
+    (transition) => transition.from === currentStage && transition.condition === exactCondition
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  if (outcome === "success") {
+    return transitions.find(
+      (transition) =>
+        transition.from === currentStage &&
+        (transition.condition === undefined || transition.condition === "always")
+    );
+  }
+
+  return undefined;
+}
 
 export class WorkflowEngine {
   
@@ -21,7 +53,23 @@ export class WorkflowEngine {
     }
 
     // 2. Fetch Config
-    const config = workflowRegistry[req.workflowName];
+    const storedConfig = req.workflowConfigSnapshot
+      ? parseWorkflowConfig(req.workflowConfigSnapshot, `request:${req.requestId}`)
+      : null;
+
+    const workflowSource =
+      req.workflowSource === "database" || req.workflowSource === "registry"
+        ? req.workflowSource
+        : undefined;
+
+    const resolvedConfig = storedConfig
+      ? null
+      : await getWorkflowConfig(req.workflowName, {
+          version: req.workflowVersion,
+          source: workflowSource,
+        });
+
+    const config = storedConfig ?? resolvedConfig?.config;
     if (!config) throw new Error(`Workflow config ${req.workflowName} not found`);
 
     // We process synchronously block by block, moving through stages until a terminal state
@@ -32,30 +80,13 @@ export class WorkflowEngine {
       const currentStage = req.currentStage;
       logger.info(`Engine processing stage: ${currentStage} for request ${requestId}`);
 
-      // Optional: Pre-stage hooks (e.g. fetching external score)
-      if (currentStage === "scoring" && !req.input.external_score_processed) {
-        try {
-          const { score } = await getExternalScore();
-          req.input.external_score = score;
-          req.input.external_score_processed = true;
-          
-          req.history.push({
-            stage: currentStage,
-            action: `Fetched external score: ${score}`,
-            timestamp: new Date()
-          });
-        } catch (error) {
-          logger.error(`Failed to fetch external score for request ${requestId}`, { error });
-          // Rethrow to let API or Bull-queue catch it (Triggering failure retry mechanism)
-          throw error; 
-        }
-      }
+      await runStageActions(currentStage, config, req);
 
       // Evaluate rules for current stage
       const rules = config.rules[currentStage] || [];
       let stageFailed = false;
       let branchToStage: string | null = null;
-      let branchToStatus: string | null = null;
+      let branchToStatus: TerminalRequestStatus | null = null;
       
       for (const rule of rules) {
         const result = evaluateRule(rule, req.input);
@@ -81,7 +112,10 @@ export class WorkflowEngine {
           if (next) {
             // Next can be a stage like 'decision' or a status like 'rejected_status'
             if (next.endsWith("_status")) {
-              branchToStatus = next.replace("_status", "");
+              const statusTarget = next.replace("_status", "");
+              if (isTerminalRequestStatus(statusTarget)) {
+                branchToStatus = statusTarget;
+              }
             } else {
               branchToStage = next;
             }
@@ -96,7 +130,7 @@ export class WorkflowEngine {
 
       // Transitions
       if (branchToStatus) {
-        req.status = branchToStatus as any;
+        req.status = branchToStatus;
         req.reasoning = `Branched to status ${branchToStatus} in stage ${currentStage}`;
         req.decisions.push({ stage: currentStage, decision: branchToStatus, reasoning: req.reasoning });
       } else if (branchToStage) {
@@ -104,10 +138,14 @@ export class WorkflowEngine {
         req.history.push({ stage: currentStage, action: `Transitioned to ${branchToStage}`, timestamp: new Date() });
         req.decisions.push({ stage: currentStage, decision: `move to ${branchToStage}` });
       } else {
-        // Linear transition based on config.transitions
-        const transition = config.transitions.find(t => t.from === currentStage && (t.condition === "on_success" ? !stageFailed : true));
-        
-        if (transition && !stageFailed) {
+        // Linear transition based on config.transitions and the stage outcome.
+        const transition = findLinearTransition(
+          config.transitions,
+          currentStage,
+          stageFailed ? "failure" : "success"
+        );
+
+        if (transition) {
           req.currentStage = transition.to;
           req.history.push({ stage: currentStage, action: `Transitioned to ${transition.to}`, timestamp: new Date() });
           req.decisions.push({ stage: currentStage, decision: `move to ${transition.to}` });
