@@ -49,6 +49,7 @@ npm install
 This project reads:
 
 I integrated the project with MongoDb Atlas Cloud DB and this is my test url, please use this for deployment - MONGODB_URI=mongodb+srv://Anudeep:Scoremehackathon@scoremehackathon.djpjijo.mongodb.net/?appName=scoremehackathon
+REDIS_URL=rediss://default:gQAAAAAAARe5AAIncDFlZjliZWIyYWQwMTU0NjQyODQ4NGUwMWE4ODg1YTQwN3AxNzE2MDk@adjusted-narwhal-71609.upstash.io:6379
 
 
 - `MONGODB_URI`
