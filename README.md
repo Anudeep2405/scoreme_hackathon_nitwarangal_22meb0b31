@@ -137,6 +137,52 @@ Important behavior:
 - When you switch workflows or versions, the guided form and sample JSON update to match the selected saved workflow.
 - After each successful request, the UI prepares a fresh idempotency key for the next request.
 
+## Local development
+
+### Prerequisites
+
+- Node.js
+- MongoDB
+- Redis
+
+### Install dependencies
+
+```bash
+npm install
+```
+
+### Configure environment
+
+This project reads:
+
+I integrated the project with MongoDb Atlas Cloud DB and this is my test url, please use this for deployment - MONGODB_URI=mongodb+srv://Anudeep:Scoremehackathon@scoremehackathon.djpjijo.mongodb.net/?appName=scoremehackathon
+
+
+- `MONGODB_URI`
+- `REDIS_URL`
+
+If you are running MongoDB and Redis locally on default ports, the code already has local defaults:
+
+```env
+MONGODB_URI=mongodb://localhost:27017/workflow_platform_dev
+REDIS_URL=redis://localhost:6379
+NODE_ENV=development
+```
+
+You can place overrides in `.env.local`.
+
+### Start the app
+
+```bash
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
 ## How to use the UI
 
 ### 1. Start with example workflows
@@ -357,49 +403,7 @@ Returns the stored request details, including:
 - history
 - reasoning
 
-## Local development
 
-### Prerequisites
-
-- Node.js
-- MongoDB
-- Redis
-
-### Install dependencies
-
-```bash
-npm install
-```
-
-### Configure environment
-
-This project reads:
-
-- `MONGODB_URI`
-- `REDIS_URL`
-- `NODE_ENV`
-
-If you are running MongoDB and Redis locally on default ports, the code already has local defaults:
-
-```env
-MONGODB_URI=mongodb://localhost:27017/workflow_platform_dev
-REDIS_URL=redis://localhost:6379
-NODE_ENV=development
-```
-
-You can place overrides in `.env.local`.
-
-### Start the app
-
-```bash
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
 
 ## Testing
 
