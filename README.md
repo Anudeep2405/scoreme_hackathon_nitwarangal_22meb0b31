@@ -30,6 +30,111 @@ The system lets non-engineers and engineers work from the same structure:
 - inspect request history, rule outcomes, and final decisions
 - retry transient failures with a Redis-backed Bull queue
 
+## Local development
+
+### Prerequisites
+
+- Node.js
+- MongoDB
+- Redis
+
+### Install dependencies
+
+```bash
+npm install
+```
+
+### Configure environment
+
+This project reads:
+
+I integrated the project with MongoDb Atlas Cloud DB and this is my test url, please use this for deployment - MONGODB_URI=mongodb+srv://Anudeep:Scoremehackathon@scoremehackathon.djpjijo.mongodb.net/?appName=scoremehackathon
+
+
+- `MONGODB_URI`
+- `REDIS_URL`
+
+If you are running MongoDB and Redis locally on default ports, the code already has local defaults:
+
+```env
+MONGODB_URI=mongodb://localhost:27017/workflow_platform_dev
+REDIS_URL=redis://localhost:6379
+NODE_ENV=development
+```
+
+You can place overrides in `.env.local`.
+
+### Start the app
+
+```bash
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+## How to use the UI
+
+### 1. Start with example workflows
+
+If you want sample data right away:
+
+1. Start the app.
+2. Open the homepage.
+3. Click `Seed registry defaults`.
+
+This creates stored workflow versions from the built-in registry so they become selectable in the catalog and Requests screen.
+
+### 2. Inspect a workflow
+
+1. Pick a workflow in the sidebar.
+2. Open `Overview`.
+3. Review the stages, transitions, schema, and rules.
+
+### 3. Create or edit a workflow
+
+1. Open `Builder`.
+2. Start from `Starter workflow` or `Blank workflow`.
+3. Configure stages, fields, rules, transitions, and stage actions.
+4. Save the workflow.
+
+Saving creates a new version. It does not overwrite the older version in place.
+
+### 4. Activate a workflow version
+
+Activate the version you want to use as the default when a request does not specify an exact version.
+
+This is useful when:
+
+- you want production to move to a new ruleset
+- you want Requests to use the latest approved version by default
+
+### 5. Test a workflow request
+
+1. Open `Requests`.
+2. Choose a saved workflow.
+3. Optionally choose a pinned version.
+4. Fill the guided form or edit the raw JSON.
+5. Click `Send workflow request`.
+
+If the workflow has an input schema, the form can render fields automatically.
+
+### 6. Inspect the outcome
+
+After submission, the Requests screen shows:
+
+- request ID
+- current status
+- current stage
+- input payload
+- triggered rules
+- decisions
+- history
+- reasoning
+
 ## Main features
 
 - Config-driven workflow engine with versioned workflow definitions
@@ -137,110 +242,7 @@ Important behavior:
 - When you switch workflows or versions, the guided form and sample JSON update to match the selected saved workflow.
 - After each successful request, the UI prepares a fresh idempotency key for the next request.
 
-## Local development
 
-### Prerequisites
-
-- Node.js
-- MongoDB
-- Redis
-
-### Install dependencies
-
-```bash
-npm install
-```
-
-### Configure environment
-
-This project reads:
-
-I integrated the project with MongoDb Atlas Cloud DB and this is my test url, please use this for deployment - MONGODB_URI=mongodb+srv://Anudeep:Scoremehackathon@scoremehackathon.djpjijo.mongodb.net/?appName=scoremehackathon
-
-
-- `MONGODB_URI`
-- `REDIS_URL`
-
-If you are running MongoDB and Redis locally on default ports, the code already has local defaults:
-
-```env
-MONGODB_URI=mongodb://localhost:27017/workflow_platform_dev
-REDIS_URL=redis://localhost:6379
-NODE_ENV=development
-```
-
-You can place overrides in `.env.local`.
-
-### Start the app
-
-```bash
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
-
-## How to use the UI
-
-### 1. Start with example workflows
-
-If you want sample data right away:
-
-1. Start the app.
-2. Open the homepage.
-3. Click `Seed registry defaults`.
-
-This creates stored workflow versions from the built-in registry so they become selectable in the catalog and Requests screen.
-
-### 2. Inspect a workflow
-
-1. Pick a workflow in the sidebar.
-2. Open `Overview`.
-3. Review the stages, transitions, schema, and rules.
-
-### 3. Create or edit a workflow
-
-1. Open `Builder`.
-2. Start from `Starter workflow` or `Blank workflow`.
-3. Configure stages, fields, rules, transitions, and stage actions.
-4. Save the workflow.
-
-Saving creates a new version. It does not overwrite the older version in place.
-
-### 4. Activate a workflow version
-
-Activate the version you want to use as the default when a request does not specify an exact version.
-
-This is useful when:
-
-- you want production to move to a new ruleset
-- you want Requests to use the latest approved version by default
-
-### 5. Test a workflow request
-
-1. Open `Requests`.
-2. Choose a saved workflow.
-3. Optionally choose a pinned version.
-4. Fill the guided form or edit the raw JSON.
-5. Click `Send workflow request`.
-
-If the workflow has an input schema, the form can render fields automatically.
-
-### 6. Inspect the outcome
-
-After submission, the Requests screen shows:
-
-- request ID
-- current status
-- current stage
-- input payload
-- triggered rules
-- decisions
-- history
-- reasoning
 
 ## Request statuses
 
